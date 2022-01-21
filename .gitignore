@@ -1,0 +1,6 @@
+**/.bsp/
+**/.idea/
+**/target/
+**/.DS_Store
+**/*.hprof
+**/stale_outputs_checked
