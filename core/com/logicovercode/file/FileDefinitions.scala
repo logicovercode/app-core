@@ -13,28 +13,28 @@ trait SystemFileFeatures{
 trait DirectoryFeatures{
 
   def /(name : String) : DirectoryHandle
-  protected final def /(jDirectory : JFile, name : String) : DirectoryHandle = {
-    val dir = new JFile(jDirectory, name)
+  protected final def /(directory : File, name : String) : DirectoryHandle = {
+    val dir = directory / name
     DirectoryHandle(dir)
   }
   def %(name : String) : FileHandle
-  protected final def %(jDirectory : JFile, name : String) : FileHandle = {
-    val dir = new JFile(jDirectory, name)
-    FileHandle(dir)
+  protected final def %(directory : File, name : String) : FileHandle = {
+    val dir = directory / name
+    FileHandle( dir )
   }
 }
 
-case class DirectoryHandle(jDirectory : JFile) extends SystemFileFeatures with DirectoryFeatures {
-  override def name: String = nameOfFile(jDirectory)
+case class DirectoryHandle(private val directory : File) extends SystemFileFeatures with DirectoryFeatures {
+  override def name: String = nameOfFile(directory.toJava)
 
-  override def /(name: String): DirectoryHandle = /(jDirectory, name)
+  override def /(name: String): DirectoryHandle = /(directory, name)
 
   def take() : ExistingDirectory = {
-    val dir = mkdirs(File(jDirectory.getAbsolutePath))
-    ExistingDirectory(dir.toJava)
+    val dir = mkdirs(directory)
+    ExistingDirectory(dir)
   }
 
-  override def %(name: String): FileHandle = %(jDirectory, name)
+  override def %(name: String): FileHandle = %(directory, name)
 }
 
 trait FileOnlyFeatures{
@@ -42,20 +42,22 @@ trait FileOnlyFeatures{
   protected final def nameOfFileWithoutExtension(jfile : JFile): String = File(jfile.getAbsolutePath).nameWithoutExtension
 }
 
-case class FileHandle(jFile : JFile) extends SystemFileFeatures with FileOnlyFeatures {
+case class FileHandle(private[file] val file : File) extends SystemFileFeatures with FileOnlyFeatures {
   override def name: String = nameOfFile(jFile)
   def touch() : ExistingFile = {
     if(jFile.exists()){
-      ExistingFile(jFile)
+      ExistingFile(file)
     }else{
       val b = jFile.createNewFile()
       if(b){
-        ExistingFile(jFile)
+        ExistingFile(file)
       }else{
         throw new RuntimeException(s"not able to create $jFile")
       }
     }
   }
+
+  def jFile: JFile = file.toJava
 
   override def nameWithoutExtension: String = nameOfFileWithoutExtension(jFile)
 }
@@ -66,51 +68,65 @@ trait ExistingFileFeatures extends SystemFileFeatures with FileOnlyFeatures {
     File(jfile.getAbsolutePath).append(text)
   }
 }
-case class ExistingFile(jfile : JFile) extends ExistingFileFeatures {
-  assert(jfile.exists, s"file $jfile doesn't exists")
-  override def name : String = nameOfFile(jfile)
+
+case class ExistingFile(private[file] val file : File) extends ExistingFileFeatures {
+  assert(file.exists, s"file $file doesn't exists")
+  override def name : String = nameOfFile(file.toJava)
 
   final def lines(): Seq[String] = {
-    val lines: Traversable[String] = File(jfile.getAbsolutePath).lines
+    val lines: Traversable[String] = File(file.toJava.getAbsolutePath).lines
     lines.toSeq
   }
 
   final def content() : String = {
-    File(jfile.getAbsolutePath).contentAsString
+    File(file.toJava.getAbsolutePath).contentAsString
   }
 
-  final def parent: ExistingDirectory = ExistingDirectory(jfile.getParentFile)
+  final def move(fileHandle : FileHandle) : ExistingFile = {
+    mv(file, fileHandle.file)
+    ExistingFile( fileHandle.file )
+  }
 
-  override def nameWithoutExtension: String = nameOfFileWithoutExtension(jfile)
+  def jFile: JFile = file.toJava
 
-  override def append(text: String): Unit = append(jfile, text)
+  final def parent: ExistingDirectory = ExistingDirectory(file.parent)
+
+  override def nameWithoutExtension: String = nameOfFileWithoutExtension(file.toJava)
+
+  override def append(text: String): Unit = append(file.toJava, text)
 }
 
 
 
 trait ExistingDirectoryFeatures extends SystemFileFeatures with DirectoryFeatures {
   def listFilesRecursively(): Seq[ExistingFile]
-  protected final def listAllFilesRecursively(existingDirectory: JFile) : Seq[ExistingFile] = {
-    File(existingDirectory.getAbsolutePath).listRecursively.toSeq.filter(!_.isDirectory).map( bf => ExistingFile(bf.toJava) )
+  protected final def listAllFilesRecursively(existingDirectory: File) : Seq[ExistingFile] = {
+    existingDirectory.listRecursively.toSeq.filter(!_.isDirectory).map( bf => ExistingFile(bf) )
   }
-  def listAllDirectoriesRecursively(existingDirectory: JFile) : Seq[ExistingDirectory] = {
-    File(existingDirectory.getAbsolutePath).listRecursively.toSeq.filter(_.isDirectory).map( bf => ExistingDirectory(bf.toJava) )
+  def listAllDirectoriesRecursively(existingDirectory: File) : Seq[ExistingDirectory] = {
+    existingDirectory.listRecursively.toSeq.filter(_.isDirectory).map( bf => ExistingDirectory(bf) )
   }
   def listDirectoriesRecursively(): Seq[ExistingDirectory]
 }
 
 
-case class ExistingDirectory(jDirectory : JFile) extends ExistingDirectoryFeatures {
-  assert(jDirectory.exists && jDirectory.isDirectory, s"directory $jDirectory doesn't exists")
+case class ExistingDirectory(private[file] val directory : File) extends ExistingDirectoryFeatures {
+  assert(directory.exists && directory.isDirectory, s"directory $directory doesn't exists")
 
-  override def name : String = nameOfFile(jDirectory)
+  override def name : String = nameOfFile(directory.toJava)
 
-  override def /(name: String): DirectoryHandle = /(jDirectory, name)
+  override def /(name: String): DirectoryHandle = /(directory, name)
 
-  override def %(name: String): FileHandle = %(jDirectory, name)
+  override def %(name: String): FileHandle = %(directory, name)
 
-  override def listFilesRecursively(): Seq[ExistingFile] = listAllFilesRecursively(jDirectory)
+  override def listFilesRecursively(): Seq[ExistingFile] = listAllFilesRecursively(directory)
 
-  override def listDirectoriesRecursively(): Seq[ExistingDirectory] = listAllDirectoriesRecursively(jDirectory)
+  override def listDirectoriesRecursively(): Seq[ExistingDirectory] = listAllDirectoriesRecursively(directory)
+}
+
+object ExistingDirectory{
+  def apply(jFile : JFile) : ExistingDirectory = {
+    ExistingDirectory( File( jFile.getAbsolutePath ) )
+  }
 }
 
