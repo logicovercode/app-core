@@ -7,6 +7,8 @@ import better.files.Dsl._
 
 import java.nio.file.Path
 import scala.util.Try
+import cats._
+import cats.implicits._
 
 trait SystemFileFeatures{
   def name : String
@@ -50,15 +52,19 @@ trait FileOnlyFeatures{
 case class FileHandle(private[file] val file : File) extends SystemFileFeatures with FileOnlyFeatures {
   override def name: String = nameOfFile(jFile)
   def touch() : ExistingFile = {
-    if(jFile.exists()){
+    if(file.exists()){
       ExistingFile(file)
     }else{
-      val b = jFile.createNewFile()
-      if(b){
-        ExistingFile(file)
-      }else{
-        throw new RuntimeException(s"not able to create $jFile")
-      }
+      mkdirs(file.parent)
+      file.touch()
+      ExistingFile(file)
+    }
+  }
+
+  def resolveFileWithExtension() : Either[Throwable, ExistingFileWithExtension] = {
+    (file.exists, file.extension(false)) match {
+      case (true, Some(extension)) => ExistingFileWithExtension(file.toJava, extension)
+      case _ => Left( throw new RuntimeException(s"${file.toJava.getAbsolutePath} doesn't exists") )
     }
   }
 
@@ -106,16 +112,19 @@ case class ExistingFileWithExtension private(private[file] val file : File, exte
 }
 
 object ExistingFileWithExtension{
-  def apply(jFile : JFile, extension : String) : Try[ExistingFileWithExtension] = Try{
-    val expectedFile = File(jFile.getAbsolutePath)
-    expectedFile.exists match {
-      case true if !expectedFile.isDirectory => ExistingFileWithExtension( expectedFile, extension )
-      case true => throw new RuntimeException(s"$expectedFile is a directory. expected file")
-      case false => throw new RuntimeException(s"file $expectedFile doesn't exists")
+  def apply(jFile : JFile, extension : String) : Either[Throwable, ExistingFileWithExtension] = {
+    val tried = Try{
+      val expectedFile = File(jFile.getAbsolutePath)
+      expectedFile.exists match {
+        case true if !expectedFile.isDirectory => ExistingFileWithExtension( expectedFile, extension )
+        case true => throw new RuntimeException(s"$expectedFile is a directory. expected file")
+        case false => throw new RuntimeException(s"file $expectedFile doesn't exists")
+      }
     }
+    tried.toEither
   }
 
-  def apply(fileAbsolutePath : String, extension : String) : Try[ExistingFileWithExtension] = {
+  def apply(fileAbsolutePath : String, extension : String) : Either[Throwable, ExistingFileWithExtension] = {
     apply( new JFile(fileAbsolutePath), extension )
   }
 }
@@ -150,16 +159,16 @@ case class ExistingFile(private[file] val file : File) extends ExistingFileFeatu
 }
 
 object ExistingFile{
-  def apply(jFile : JFile) : Try[ExistingFile] = Try{
+  def apply(jFile : JFile) : Either[Throwable, ExistingFile] = {
     val expectedFile = File(jFile.getAbsolutePath)
     expectedFile.exists match {
-      case true if !expectedFile.isDirectory => ExistingFile( expectedFile )
-      case true => throw new RuntimeException(s"$expectedFile is a directory. expected file")
-      case false => throw new RuntimeException(s"file $expectedFile doesn't exists")
+      case true if !expectedFile.isDirectory => Right(ExistingFile( expectedFile ))
+      case true => Left( throw new RuntimeException(s"$expectedFile is a directory. expected file"))
+      case false => Left( throw new RuntimeException(s"file $expectedFile doesn't exists") )
     }
   }
 
-  def apply(fileAbsolutePath : String) : Try[ExistingFile] = {
+  def apply(fileAbsolutePath : String) : Either[Throwable, ExistingFile] = {
     apply( new JFile(fileAbsolutePath) )
   }
 }
@@ -179,10 +188,6 @@ case class ExistingDirectory(private[file] val directory : File) extends SystemF
     directory.list(predicate, searchDepth).toSeq
   }
 
-  def listAllFiles(searchDepth : Int = Integer.MAX_VALUE): Seq[ExistingFile] = {
-    listBetterFilesRecursively(!_.isDirectory, searchDepth).map( bf => ExistingFile(bf) )
-  }
-
   private def listAllExtensionExistingFiles(extensionsWithoutDot : Set[String], searchDepth : Int = Integer.MAX_VALUE): Seq[ExistingFile] = {
 
     def extensionRequired(file : File) : Boolean = {
@@ -195,12 +200,27 @@ case class ExistingDirectory(private[file] val directory : File) extends SystemF
     listBetterFilesRecursively( extensionRequired, searchDepth ).map( ExistingFile(_) )
   }
 
-  def listAllFilesWithExtension(extensionWithoutDot : String, searchDepth : Int = Integer.MAX_VALUE): Seq[ExistingFileWithExtension] = {
-    listAllExtensionExistingFiles( Set(extensionWithoutDot), searchDepth ).map( existingFile => ExistingFileWithExtension(existingFile.file, extensionWithoutDot) )
+
+  def listAllFiles(searchDepth : Int = Integer.MAX_VALUE): Seq[EThrowExistingFile] = {
+    val tried = Try{
+      listBetterFilesRecursively(!_.isDirectory, searchDepth).map( bf => ExistingFile(bf) )
+    }.sequence
+    tried.map(_.toEither)
   }
 
-  def listAllDirectories(searchDepth : Int = Integer.MAX_VALUE): Seq[ExistingDirectory] = {
-    listBetterFilesRecursively(f => f.isDirectory && !f.equals(directory), searchDepth).map( bf => ExistingDirectory(bf) )
+  def listAllFilesWithExtension(extensionWithoutDot : String, searchDepth : Int = Integer.MAX_VALUE): Seq[EThrowExistingFileWithExtension] = {
+    val tried = Try{
+      listAllExtensionExistingFiles( Set(extensionWithoutDot), searchDepth ).map( existingFile => ExistingFileWithExtension(existingFile.file, extensionWithoutDot) )
+    }.sequence
+    tried.map(_.toEither)
+  }
+
+
+  def listAllDirectories(searchDepth : Int = Integer.MAX_VALUE): Seq[EThrowDirectory] = {
+    val tried = Try{
+      listBetterFilesRecursively(f => f.isDirectory && !f.equals(directory), searchDepth).map( bf => ExistingDirectory(bf) )
+    }.sequence
+    tried.map(_.toEither)
   }
 
   def relativePath(existingFile: ExistingFile) : Path = directory.relativize(existingFile.file)
@@ -209,15 +229,15 @@ case class ExistingDirectory(private[file] val directory : File) extends SystemF
 }
 
 object ExistingDirectory{
-  def apply(jFile : JFile) : Try[ExistingDirectory] = Try{
+  def apply(jFile : JFile) : Either[Throwable, ExistingDirectory] = {
     val expectedDirectory = File(jFile.getAbsolutePath)
     expectedDirectory.exists && expectedDirectory.isDirectory match {
-      case true => ExistingDirectory( expectedDirectory )
-      case false => throw new RuntimeException(s"directory $expectedDirectory doesn't exists")
+      case true => Right(ExistingDirectory( expectedDirectory ))
+      case false => Left(throw new RuntimeException(s"directory $expectedDirectory doesn't exists"))
     }
   }
 
-  def apply(directoryAbsolutePath : String) : Try[ExistingDirectory] = {
+  def apply(directoryAbsolutePath : String) : Either[Throwable, ExistingDirectory] = {
     apply( new JFile(directoryAbsolutePath) )
   }
 }
