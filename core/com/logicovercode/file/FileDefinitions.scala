@@ -34,6 +34,15 @@ case class DirectoryHandle(private val directory : File) extends SystemFileFeatu
 
   override def /(name: String): DirectoryHandle = /(directory, name)
 
+  def jDirectory: JFile = directory.toJava
+
+  def resolve() : Either[Throwable, ExistingDirectory] = {
+    directory.exists match {
+      case true => Right(ExistingDirectory(directory))
+      case false => Left( throw new RuntimeException(s"${directory.toJava.getAbsolutePath} doesn't exists") )
+    }
+  }
+
   def exists : Boolean = directory.exists
 
   def take() : ExistingDirectory = {
@@ -183,6 +192,8 @@ case class ExistingDirectory(private[file] val directory : File) extends SystemF
   final def parent: ExistingDirectory = ExistingDirectory(directory.parent)
 
   def jDirectory: JFile = directory.toJava
+
+  def directoryHandle() : DirectoryHandle = DirectoryHandle(directory)
 
   private def listBetterFilesRecursively(predicate : File => Boolean, searchDepth : Int) : Seq[File] = {
     directory.list(predicate, searchDepth).toSeq
