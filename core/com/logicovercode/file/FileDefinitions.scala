@@ -1,14 +1,11 @@
 package com.logicovercode.file
 
+import better.files.Dsl._
 import better.files.File
 
 import java.io.{File => JFile}
-import better.files.Dsl._
-
 import java.nio.file.Path
-import scala.util.Try
-import cats._
-import cats.implicits._
+import scala.util.{Failure, Success, Try}
 
 trait SystemFileFeatures{
   def name : String
@@ -60,13 +57,19 @@ trait FileOnlyFeatures{
 
 case class FileHandle(private[file] val file : File) extends SystemFileFeatures with FileOnlyFeatures {
   override def name: String = nameOfFile(jFile)
-  def touch() : ExistingFile = {
-    if(file.exists()){
-      ExistingFile(file)
-    }else{
-      mkdirs(file.parent)
-      file.touch()
-      ExistingFile(file)
+  def touch() : Either[Throwable, ExistingFile] = {
+    val tried = Try {
+      if (file.exists()) {
+        ExistingFile(file)
+      } else {
+        mkdirs(file.parent)
+        file.touch()
+        ExistingFile(file)
+      }
+    }
+    tried match {
+      case Success(existingFile) => Right(existingFile)
+      case Failure(ex) => Left(ex)
     }
   }
 
@@ -212,26 +215,35 @@ case class ExistingDirectory(private[file] val directory : File) extends SystemF
   }
 
 
-  def listAllFiles(searchDepth : Int = Integer.MAX_VALUE): Seq[EThrowExistingFile] = {
+  def listAllFiles(searchDepth : Int = Integer.MAX_VALUE): Either[Throwable, Seq[ExistingFile]] = {
     val tried = Try{
       listBetterFilesRecursively(!_.isDirectory, searchDepth).map( bf => ExistingFile(bf) )
-    }.sequence
-    tried.map(_.toEither)
+    }
+    tried match {
+      case Success(existingFiles) => Right(existingFiles)
+      case Failure(ex) => Left(ex)
+    }
   }
 
-  def listAllFilesWithExtension(extensionWithoutDot : String, searchDepth : Int = Integer.MAX_VALUE): Seq[EThrowExistingFileWithExtension] = {
+  def listAllFilesWithExtension(extensionWithoutDot : String, searchDepth : Int = Integer.MAX_VALUE): Either[Throwable, Seq[ExistingFileWithExtension]] = {
     val tried = Try{
       listAllExtensionExistingFiles( Set(extensionWithoutDot), searchDepth ).map( existingFile => ExistingFileWithExtension(existingFile.file, extensionWithoutDot) )
-    }.sequence
-    tried.map(_.toEither)
+    }
+    tried match {
+      case Success(existingFilesWithExtension) => Right(existingFilesWithExtension)
+      case Failure(ex) => Left(ex)
+    }
   }
 
 
-  def listAllDirectories(searchDepth : Int = Integer.MAX_VALUE): Seq[EThrowDirectory] = {
+  def listAllDirectories(searchDepth : Int = Integer.MAX_VALUE): Either[Throwable, Seq[ExistingDirectory]] = {
     val tried = Try{
       listBetterFilesRecursively(f => f.isDirectory && !f.equals(directory), searchDepth).map( bf => ExistingDirectory(bf) )
-    }.sequence
-    tried.map(_.toEither)
+    }
+    tried match {
+      case Success(existingDirectories) => Right(existingDirectories)
+      case Failure(ex) => Left(ex)
+    }
   }
 
   def relativePath(existingFile: ExistingFile) : Path = directory.relativize(existingFile.file)
