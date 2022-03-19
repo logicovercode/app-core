@@ -36,7 +36,7 @@ object CodePaths extends CheckOs {
     }
   }
 
-  def packageFile(): File = {
+  def packageDirectory(): File = {
     val effectiveStack = effectiveStackTraceElement()
     val fileName = effectiveStack.getFileName
     val map = allScalaAndJavaFiles(cwd).map(f => (f.name, f)).toMap
@@ -55,8 +55,8 @@ object CodePaths extends CheckOs {
     className.substring(0, i).replace(".", OS_SLASH)
   }
 
-  def sourceFile(): File = {
-    val absolutePath = packageFile().toJava.getAbsolutePath
+  def currentSourceDirectory(): File = {
+    val absolutePath = packageDirectory().toJava.getAbsolutePath
     val i = absolutePath.indexOf(packagePathInContext())
     File(absolutePath.substring(0, i))
   }
