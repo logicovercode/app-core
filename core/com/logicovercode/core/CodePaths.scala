@@ -58,7 +58,12 @@ object CodePaths extends CheckOs {
   def currentSourceDirectory(): File = {
     val absolutePath = packageDirectory().toJava.getAbsolutePath
     val i = absolutePath.indexOf(packagePathInContext())
-    File(absolutePath.substring(0, i))
+    if(i == -1){
+      File(absolutePath)
+    }else{
+      File(absolutePath.substring(0, i))
+    }
+
   }
 
   private def allScalaAndJavaFiles(directory: File): Seq[File] = {
