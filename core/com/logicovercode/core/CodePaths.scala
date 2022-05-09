@@ -3,7 +3,10 @@ package com.logicovercode.core
 import better.files.Dsl.cwd
 import better.files.File
 
-object CodePaths {
+object CodePaths extends CheckOs {
+
+
+
   case class StackInfo(index : Int, className : String, fileName : String){
     val packagePrefix = {
       val arr = className.split("\\.")
@@ -33,7 +36,7 @@ object CodePaths {
     }
   }
 
-  def packageFile(): File = {
+  def packageDirectory(): File = {
     val effectiveStack = effectiveStackTraceElement()
     val fileName = effectiveStack.getFileName
     val map = allScalaAndJavaFiles(cwd).map(f => (f.name, f)).toMap
@@ -41,21 +44,26 @@ object CodePaths {
   }
 
   def classPackagePath(klass : Class[_]) : String = {
-    val kpPath = klass.getPackage.getName.replace(".", "/")
-    "/" + kpPath
+    val kpPath = klass.getPackage.getName.replace(".", OS_SLASH)
+    OS_SLASH + kpPath
   }
 
   def packagePathInContext(): String = {
     val effectiveStack = effectiveStackTraceElement()
     val className = effectiveStack.getClassName
     val i = className.lastIndexOf(".")
-    className.substring(0, i).replace(".", "/")
+    className.substring(0, i).replace(".", OS_SLASH)
   }
 
-  def sourceFile(): File = {
-    val absolutePath = packageFile().toJava.getAbsolutePath
+  def currentSourceDirectory(): File = {
+    val absolutePath = packageDirectory().toJava.getAbsolutePath
     val i = absolutePath.indexOf(packagePathInContext())
-    File(absolutePath.substring(0, i))
+    if(i == -1){
+      File(absolutePath)
+    }else{
+      File(absolutePath.substring(0, i))
+    }
+
   }
 
   private def allScalaAndJavaFiles(directory: File): Seq[File] = {

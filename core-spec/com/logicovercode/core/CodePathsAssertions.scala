@@ -1,22 +1,21 @@
 package com.logicovercode.core
 
 import better.files.Dsl.cwd
-import com.logicovercode.core.CurrentFileContext
 
 object CodePathsAssertions {
 
   def main(args : Array[String]) : Unit = {
 
-    val packageDirectory = CurrentFileContext.PACKAGE_SRC_FILE
+    val packageDirectory = SourceDirectory.PACKAGE_DIRECTORY
     println(packageDirectory)
     assert(packageDirectory.equals( (cwd / "core-spec" / "com" / "logicovercode" / "core").toJava ) )
 
-    val srcDirectory = CurrentFileContext.SRC_FILE
+    val srcDirectory = SourceDirectory.CURRENT_SRC_DIRECTORY
     println(srcDirectory)
     assert(srcDirectory.equals( (cwd / "core-spec" ).toJava ) )
 
 
-    val packagePath = CurrentFileContext.PACKAGE_SRC_PATH
+    val packagePath = SourceDirectory.PACKAGE_SRC_PATH
     println(packagePath)
     assert(packagePath.equals("com/logicovercode/core"))
   }
