@@ -47,6 +47,14 @@ case class DirectoryHandle(private val directory : File) extends SystemFileFeatu
     ExistingDirectory(dir)
   }
 
+  def recreate() : Either[Throwable, ExistingDirectory] = {
+    for{
+      _ <- Try( rm(directory) ).toEither
+      recreatedFile <- Try(take()).toEither
+    } yield recreatedFile
+  }
+
+
   override def %(name: String): FileHandle = %(directory, name)
 }
 
