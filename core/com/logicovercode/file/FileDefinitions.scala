@@ -73,6 +73,13 @@ case class FileHandle(private[file] val file : File) extends SystemFileFeatures 
     }
   }
 
+  def recreate() : Either[Throwable, ExistingFile] = {
+    for{
+      _ <- Try( rm(file) ).toEither
+      recreatedFile <- touch()
+    } yield recreatedFile
+  }
+
   def resolveFileWithExtension() : Either[Throwable, ExistingFileWithExtension] = {
     (file.exists, file.extension(false)) match {
       case (true, Some(extension)) => ExistingFileWithExtension(file.toJava, extension)

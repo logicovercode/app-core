@@ -1,6 +1,6 @@
 val githubRepo = githubHosting("logicovercode", "app-core", "techLeadAtLogicOverCode", "techlead@logicovercode.com")
 
-val sBuild = SBuild("com.logicovercode", "app-core", "0.0.002")
+val sBuild = SBuild("com.logicovercode", "app-core", "0.0.003")
   .sourceDirectories("core")
   .testSourceDirectories("core-spec")
   .dependencies( better_files(), cats_core() )
