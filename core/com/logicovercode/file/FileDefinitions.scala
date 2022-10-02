@@ -214,7 +214,7 @@ case class ExistingDirectory(private[file] val directory : File) extends SystemF
   def directoryHandle() : DirectoryHandle = DirectoryHandle(directory)
 
   private def listBetterFilesRecursively(predicate : File => Boolean, searchDepth : Int) : Seq[File] = {
-    directory.list(predicate, searchDepth).toSeq
+    directory.list(predicate, searchDepth, File.VisitOptions.follow).toSeq
   }
 
   private def listAllExtensionExistingFiles(extensionsWithoutDot : Set[String], searchDepth : Int = Integer.MAX_VALUE): Seq[ExistingFile] = {
@@ -232,7 +232,7 @@ case class ExistingDirectory(private[file] val directory : File) extends SystemF
 
   def listAllFiles(searchDepth : Int = Integer.MAX_VALUE): Either[Throwable, Seq[ExistingFile]] = {
     val tried = Try{
-      listBetterFilesRecursively(!_.isDirectory, searchDepth).map( bf => ExistingFile(bf) )
+      listBetterFilesRecursively(!_.isDirectory, searchDepth, File.VisitOptions.follow).map( bf => ExistingFile(bf) )
     }
     tried match {
       case Success(existingFiles) => Right(existingFiles)
