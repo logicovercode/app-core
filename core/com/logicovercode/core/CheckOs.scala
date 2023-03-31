@@ -2,8 +2,8 @@ package com.logicovercode.core
 
 trait CheckOs {
 
-  val OS_PROPERTY = "os.name"
-  def mayBeOsProperty(): Option[String] = sys.props.get(OS_PROPERTY)
+  private val OS_PROPERTY = "os.name"
+  private def mayBeOsProperty(): Option[String] = sys.props.get(OS_PROPERTY)
 
   val OS_SLASH = if(isWindowsMachine()) "\\" else "/"
 
