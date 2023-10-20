@@ -6,6 +6,7 @@ import better.files.File
 import java.io.{File => JFile}
 import java.nio.file.Path
 import scala.util.{Failure, Success, Try}
+import cats.implicits._
 
 trait SystemFileFeatures{
   def name : String
@@ -251,10 +252,10 @@ case class ExistingDirectory(private[file] val directory : File) extends SystemF
 
   def listAllFilesWithExtension(extensionWithoutDot : String, searchDepth : Int = Integer.MAX_VALUE): Either[Throwable, Seq[ExistingFileWithExtension]] = {
     val tried = Try{
-      listAllExtensionExistingFiles( Set(extensionWithoutDot), searchDepth ).map( existingFile => ExistingFileWithExtension(existingFile.file, extensionWithoutDot) )
+      listAllExtensionExistingFiles( Set(extensionWithoutDot), searchDepth ).map( existingFile => ExistingFileWithExtension(existingFile.file.toJava, extensionWithoutDot) )
     }
     tried match {
-      case Success(existingFilesWithExtension) => Right(existingFilesWithExtension)
+      case Success(existingFilesWithExtension) => existingFilesWithExtension.sequence
       case Failure(ex) => Left(ex)
     }
   }
