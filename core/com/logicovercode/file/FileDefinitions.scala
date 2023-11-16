@@ -6,6 +6,7 @@ import better.files.File
 import java.io.{File => JFile}
 import java.nio.file.Path
 import scala.util.{Failure, Success, Try}
+import cats.implicits._
 
 trait SystemFileFeatures{
   def name : String
@@ -32,6 +33,8 @@ case class DirectoryHandle(private val directory : File) extends SystemFileFeatu
   override def /(name: String): DirectoryHandle = /(directory, name)
 
   def jDirectory: JFile = directory.toJava
+  def pathString: String = jDirectory.getAbsolutePath
+
 
   def resolve() : Either[Throwable, ExistingDirectory] = {
     directory.exists match {
@@ -47,6 +50,14 @@ case class DirectoryHandle(private val directory : File) extends SystemFileFeatu
     ExistingDirectory(dir)
   }
 
+  def recreate() : Either[Throwable, ExistingDirectory] = {
+    for{
+      _ <- Try( rm(directory) ).toEither
+      recreatedFile <- Try(take()).toEither
+    } yield recreatedFile
+  }
+
+
   override def %(name: String): FileHandle = %(directory, name)
 }
 
@@ -57,6 +68,9 @@ trait FileOnlyFeatures{
 
 case class FileHandle(private[file] val file : File) extends SystemFileFeatures with FileOnlyFeatures {
   override def name: String = nameOfFile(jFile)
+
+  def pathString: String = jFile.getAbsolutePath
+
   def touch() : Either[Throwable, ExistingFile] = {
     val tried = Try {
       if (file.exists()) {
@@ -71,6 +85,13 @@ case class FileHandle(private[file] val file : File) extends SystemFileFeatures 
       case Success(existingFile) => Right(existingFile)
       case Failure(ex) => Left(ex)
     }
+  }
+
+  def recreate() : Either[Throwable, ExistingFile] = {
+    for{
+      _ <- Try( rm(file) ).toEither
+      recreatedFile <- touch()
+    } yield recreatedFile
   }
 
   def resolveFileWithExtension() : Either[Throwable, ExistingFileWithExtension] = {
@@ -98,6 +119,8 @@ case class ExistingFileWithExtension private(private[file] val file : File, exte
   assert(file.exists, s"file $file doesn't exists")
   override def name : String = nameOfFile(file.toJava)
   def mayBeExtension : Option[String] = file.extension(false)
+
+  def absolutePath : String = jFile.getAbsolutePath
 
   final def lines(): Seq[String] = {
     val lines: Traversable[String] = File(file.toJava.getAbsolutePath).lines
@@ -159,6 +182,7 @@ case class ExistingFile(private[file] val file : File) extends ExistingFileFeatu
   }
 
   def jFile: JFile = file.toJava
+  def absolutePath : String = jFile.getAbsolutePath
 
   final def parent: ExistingDirectory = ExistingDirectory(file.parent)
 
@@ -195,11 +219,12 @@ case class ExistingDirectory(private[file] val directory : File) extends SystemF
   final def parent: ExistingDirectory = ExistingDirectory(directory.parent)
 
   def jDirectory: JFile = directory.toJava
+  def absolutePath : String = jDirectory.getAbsolutePath
 
   def directoryHandle() : DirectoryHandle = DirectoryHandle(directory)
 
   private def listBetterFilesRecursively(predicate : File => Boolean, searchDepth : Int) : Seq[File] = {
-    directory.list(predicate, searchDepth).toSeq
+    directory.list(predicate, searchDepth, File.VisitOptions.follow).toSeq
   }
 
   private def listAllExtensionExistingFiles(extensionsWithoutDot : Set[String], searchDepth : Int = Integer.MAX_VALUE): Seq[ExistingFile] = {
@@ -227,10 +252,10 @@ case class ExistingDirectory(private[file] val directory : File) extends SystemF
 
   def listAllFilesWithExtension(extensionWithoutDot : String, searchDepth : Int = Integer.MAX_VALUE): Either[Throwable, Seq[ExistingFileWithExtension]] = {
     val tried = Try{
-      listAllExtensionExistingFiles( Set(extensionWithoutDot), searchDepth ).map( existingFile => ExistingFileWithExtension(existingFile.file, extensionWithoutDot) )
+      listAllExtensionExistingFiles( Set(extensionWithoutDot), searchDepth ).map( existingFile => ExistingFileWithExtension(existingFile.file.toJava, extensionWithoutDot) )
     }
     tried match {
-      case Success(existingFilesWithExtension) => Right(existingFilesWithExtension)
+      case Success(existingFilesWithExtension) => existingFilesWithExtension.sequence
       case Failure(ex) => Left(ex)
     }
   }

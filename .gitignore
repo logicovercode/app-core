@@ -1,3 +1,5 @@
+predef.sc
+**/out/
 **/.bsp/
 **/.idea/
 **/target/

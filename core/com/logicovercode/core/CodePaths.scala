@@ -5,9 +5,7 @@ import better.files.File
 
 object CodePaths extends CheckOs {
 
-
-
-  case class StackInfo(index : Int, className : String, fileName : String){
+  private case class StackInfo(index : Int, className : String, fileName : String){
     val packagePrefix = {
       val arr = className.split("\\.")
       arr.take(2).mkString(".")
